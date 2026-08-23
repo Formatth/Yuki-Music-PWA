@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yuki-music-shell-v1';
+const CACHE_NAME = 'yuki-music-shell-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -36,20 +36,18 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Never cache API responses or remote media. Music/search/lyrics data must stay fresh.
+  // API responses and remote media stay network-only so music/search/lyrics remain fresh.
   if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok && response.type === 'basic') {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      });
-
-      return cached || network.catch(() => caches.match('/index.html'));
-    })
+      })
+      .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
   );
 });
