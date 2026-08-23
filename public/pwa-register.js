@@ -28,9 +28,9 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
 
-  // YouTube exposes a dedicated event when a scripted playback request is
-  // blocked. Remember that state so the next real Play tap can retry directly
-  // from the user's gesture rather than from a timer/callback.
+  // YouTube exposes dedicated events when scripted playback is blocked or
+  // when the embedded player itself rejects a video. Keep these diagnostics
+  // visible instead of silently failing.
   const attachYouTubeDiagnostics = () => {
     try {
       if (typeof Player === 'undefined' || !Player.yt || !Player.ready) return false;
@@ -41,6 +41,11 @@
         Player._yukiAutoplayBlocked = true;
         try {
           if (typeof toast === 'function') toast('Tap Play again to start playback');
+        } catch (_) {}
+      });
+      Player.yt.addEventListener('onError', (event) => {
+        try {
+          if (typeof toast === 'function') toast(`YouTube playback error ${event.data}`);
         } catch (_) {}
       });
       return true;
