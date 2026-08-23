@@ -1,0 +1,90 @@
+name: Import Rich Music UI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Yuki Music
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Rich Music source
+        uses: actions/checkout@v4
+        with:
+          repository: ramax100/YT-Music-Mod
+          path: upstream
+          fetch-depth: 1
+
+      - name: Import upstream frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf public
+          mkdir -p public
+          cp -a upstream/public/. public/
+          rm -rf upstream
+
+      - name: Point frontend at Yuki backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('public/app.js')
+          s = p.read_text(encoding='utf-8')
+          replacements = {
+              "'/api/': 'http://localhost:3000/api/'": "'/api/': 'https://yuki-music-backend.vercel.app/api/'",
+              'http://localhost:3000/api/': 'https://yuki-music-backend.vercel.app/api/',
+              'YT Music Mod': 'Yuki Music',
+              'YT-Music-Mod': 'Yuki Music',
+          }
+          for a, b in replacements.items():
+              s = s.replace(a, b)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+          for a, b in [('YT Music Mod', 'Yuki Music'), ('YT-Music-Mod', 'Yuki Music')]:
+              s = s.replace(a, b)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Remove old Vite scaffold
+        shell: bash
+        run: |
+          rm -rf src
+          rm -f manifest.webmanifest package-lock.json
+          rm -f package.json
+          cp upstream/package.json /tmp/upstream-package.json 2>/dev/null || true
+
+      - name: Create deployment package
+        shell: bash
+        run: |
+          cat > package.json <<'EOF'
+          {
+            "name": "yuki-music-pwa",
+            "version": "1.0.0",
+            "private": true,
+            "scripts": {
+              "start": "node server.js"
+            },
+            "engines": {
+              "node": ">=20"
+            }
+          }
+          EOF
+
+      - name: Commit imported UI
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: import Rich Music frontend for Yuki Music" || exit 0
+          git push
