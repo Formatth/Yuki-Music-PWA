@@ -28,55 +28,67 @@ jobs:
           rm -rf public
           mkdir -p public
           cp -a upstream/public/. public/
-          rm -rf upstream
 
-      - name: Point frontend at Yuki backend
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('public/app.js')
-          s = p.read_text(encoding='utf-8')
-          replacements = {
-              "'/api/': 'http://localhost:3000/api/'": "'/api/': 'https://yuki-music-backend.vercel.app/api/'",
-              'http://localhost:3000/api/': 'https://yuki-music-backend.vercel.app/api/',
-              'YT Music Mod': 'Yuki Music',
-              'YT-Music-Mod': 'Yuki Music',
-          }
-          for a, b in replacements.items():
-              s = s.replace(a, b)
-          p.write_text(s, encoding='utf-8')
-
-          p = Path('public/index.html')
-          s = p.read_text(encoding='utf-8')
-          for a, b in [('YT Music Mod', 'Yuki Music'), ('YT-Music-Mod', 'Yuki Music')]:
-              s = s.replace(a, b)
-          p.write_text(s, encoding='utf-8')
+          for name in ('public/app.js', 'public/index.html'):
+              p = Path(name)
+              s = p.read_text(encoding='utf-8')
+              s = s.replace('YT Music Mod', 'Yuki Music')
+              s = s.replace('YT-Music-Mod', 'Yuki Music')
+              s = s.replace('Rich Music', 'Yuki Music')
+              s = s.replace('http://localhost:3000/api/', 'https://yuki-music-backend.vercel.app/api/')
+              p.write_text(s, encoding='utf-8')
           PY
 
       - name: Remove old Vite scaffold
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf src
-          rm -f manifest.webmanifest package-lock.json
-          rm -f package.json
-          cp upstream/package.json /tmp/upstream-package.json 2>/dev/null || true
+          rm -f manifest.webmanifest
+          rm -f package.json package-lock.json
 
-      - name: Create deployment package
-        shell: bash
-        run: |
           cat > package.json <<'EOF'
           {
             "name": "yuki-music-pwa",
             "version": "1.0.0",
             "private": true,
             "scripts": {
-              "start": "node server.js"
+              "start": "node -e \"console.log('Yuki Music static PWA')\""
             },
             "engines": {
               "node": ">=20"
             }
+          }
+          EOF
+
+      - name: Add Yuki PWA manifest
+        shell: bash
+        run: |
+          cat > public/manifest.webmanifest <<'EOF'
+          {
+            "name": "Yuki Music",
+            "short_name": "Yuki Music",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#000000",
+            "theme_color": "#000000",
+            "description": "Yuki Music Progressive Web App"
+          }
+          EOF
+
+      - name: Configure Vercel API rewrites
+        shell: bash
+        run: |
+          cat > vercel.json <<'EOF'
+          {
+            "rewrites": [
+              {
+                "source": "/api/:path*",
+                "destination": "https://yuki-music-backend.vercel.app/api/:path*"
+              }
+            ]
           }
           EOF
 
