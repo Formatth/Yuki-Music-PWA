@@ -28,28 +28,17 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
 
-  // If the first song click happened before the YouTube IFrame finished
-  // loading, its programmatic play request can be classified as autoplay.
-  // A real tap on Play is a genuine user gesture, so retry directly in that
-  // event path.
-  window.addEventListener('click', (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target || !target.closest('#mini-play, #np-play, .play-big')) return;
-    try {
-      if (typeof Player !== 'undefined' && Player.yt && Player.ready) {
-        Player.yt.playVideo();
-      }
-    } catch (_) {}
-  }, true);
-
-  // Surface YouTube's explicit autoplay failure instead of silently leaving
-  // the player paused.
+  // YouTube exposes a dedicated event when a scripted playback request is
+  // blocked. Remember that state so the next real Play tap can retry directly
+  // from the user's gesture rather than from a timer/callback.
   const attachYouTubeDiagnostics = () => {
     try {
       if (typeof Player === 'undefined' || !Player.yt || !Player.ready) return false;
       if (Player.yt.__yukiDiagnosticsAttached) return true;
       Player.yt.__yukiDiagnosticsAttached = true;
+      Player._yukiAutoplayBlocked = false;
       Player.yt.addEventListener('onAutoplayBlocked', () => {
+        Player._yukiAutoplayBlocked = true;
         try {
           if (typeof toast === 'function') toast('Tap Play again to start playback');
         } catch (_) {}
@@ -59,6 +48,20 @@
       return false;
     }
   };
+
+  // This listener runs in the same trusted click event as the Play button.
+  // It is only active after YouTube explicitly reported an autoplay block, so
+  // it cannot interfere with normal pause/play behaviour.
+  window.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target || !target.closest('#mini-play, #np-play, .play-big')) return;
+    try {
+      if (typeof Player !== 'undefined' && Player._yukiAutoplayBlocked && Player.yt && Player.ready) {
+        Player._yukiAutoplayBlocked = false;
+        Player.yt.playVideo();
+      }
+    } catch (_) {}
+  }, true);
 
   window.addEventListener('load', () => {
     const timer = setInterval(() => {
