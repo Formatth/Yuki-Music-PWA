@@ -1,0 +1,53 @@
+name: Enable Yuki Music PWA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  enable-pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add PWA hooks to index.html
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('public/index.html')
+          text = path.read_text(encoding='utf-8')
+
+          manifest = '<link rel="manifest" href="/manifest.webmanifest" />'
+          if manifest not in text:
+              marker = '<link rel="stylesheet" href="styles.css" />'
+              if marker not in text:
+                  raise SystemExit('styles.css link not found in public/index.html')
+              text = text.replace(marker, marker + '\n' + manifest, 1)
+
+          register = '<script src="/pwa-register.js" defer></script>'
+          if register not in text:
+              marker = '</head>'
+              if marker not in text:
+                  raise SystemExit('</head> not found in public/index.html')
+              text = text.replace(marker, register + '\n' + marker, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit PWA hooks
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then
+            echo 'PWA hooks already enabled.'
+            exit 0
+          fi
+          git commit -m 'feat: enable installable PWA'
+          git push
