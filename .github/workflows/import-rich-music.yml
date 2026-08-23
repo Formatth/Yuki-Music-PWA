@@ -1,0 +1,60 @@
+name: Import Rich Music
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Yuki Music
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import upstream Rich Music
+        run: |
+          set -e
+          rm -rf /tmp/rich-music
+          git clone --depth 1 https://github.com/ramax100/YT-Music-Mod.git /tmp/rich-music
+
+          rm -rf public api server.js vercel.json package.json package-lock.json
+          cp -R /tmp/rich-music/public ./public
+          cp -R /tmp/rich-music/api ./api
+          cp /tmp/rich-music/server.js ./server.js
+          cp /tmp/rich-music/vercel.json ./vercel.json
+          cp /tmp/rich-music/package.json ./package.json
+          cp /tmp/rich-music/package-lock.json ./package-lock.json
+
+          cp /tmp/rich-music/public/index.html ./index.html
+          rm -rf src
+
+          # Rebrand the UI without changing application logic.
+          find public -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -print0 |
+            xargs -0 sed -i \
+              -e 's/Rich Music/Yuki Music/g' \
+              -e 's/Rich music/Yuki Music/g' \
+              -e 's/rich-music/yuki-music/g'
+
+          # Keep Vercel/Node dependency resolution deterministic.
+          npm install --package-lock-only --ignore-scripts
+
+      - name: Verify imported files
+        run: |
+          test -f public/index.html
+          test -f public/app.js
+          test -f public/styles.css
+          test -f server.js
+          test -f vercel.json
+          test -d api
+
+      - name: Commit import
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: import Rich Music frontend and backend" || echo "No changes to commit"
+          git push
